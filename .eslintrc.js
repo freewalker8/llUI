@@ -13,18 +13,12 @@ module.exports = {
 
   rules: {
     "no-console": "off",
-    "no-debugger": "off"
+    "no-debugger": process.env.NODE_ENV === 'production' ? 'error' : 'off'
   },
 
   overrides: [
     {
-      files: [
-        "**/__tests__/*.{j,t}s?(x)",
-        "**/tests/unit/**/*.spec.{j,t}s?(x)"
-      ],
-      env: {
-        jest: true
-      }
+      files: '.prettierrc.js'
     }
   ]
 };
