@@ -50,5 +50,21 @@
   "peerDependencies": {
     "element-ui": "^2.6.3",
     "vue": "^2.6.6"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/freewalker8/ll-ui.git"
+  },
+  "keywords": [
+    "vue",
+    "element",
+    "table",
+    "pagination",
+    "form",
+    "ui"
+  ],
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/freewalker8/ll-ui/issues"
   }
 }
