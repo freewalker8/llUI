@@ -11,6 +11,12 @@ module.exports = {
   css: { extract: false },
   configureWebpack: {
     entry: resolve('./examples/main.js'),
+    resolve: {
+      alias: {
+        '@': resolve('src'),
+        utils: resolve('src/packages/utils')
+      }
+    },
     externals: isProd
       ? [
           {

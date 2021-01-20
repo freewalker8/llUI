@@ -24,7 +24,11 @@ module.exports = {
   },
   resolve: {
     extensions: ['.js', '.vue', '.json'],
-    modules: ['node_modules']
+    modules: ['node_modules'],
+    alias: {
+      '@': resolve('src'),
+      utils: resolve('src/packages/utils')
+    }
   },
   performance: {
     hints: false
