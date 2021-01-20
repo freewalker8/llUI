@@ -30,3 +30,12 @@ export const sortObjectArrayByProp = (arr, prop = 'label', order = 'asc') => {
   });
 };
 
+export const uuid = function() {
+  function s4() {
+    return Math.floor(65536 * Math.random()).toString(16);
+  }
+
+  const rd = s4() + '_' + s4() + '_' + s4() + '_' + Date.now().toString(16).slice(-4);
+
+  return rd;
+}
