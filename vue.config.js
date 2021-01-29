@@ -14,7 +14,7 @@ module.exports = {
     resolve: {
       alias: {
         '@': resolve('src'),
-        utils: resolve('src/packages/utils')
+        utils: resolve('src/utils')
       }
     },
     externals: isProd

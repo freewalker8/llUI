@@ -27,7 +27,7 @@ module.exports = {
     modules: ['node_modules'],
     alias: {
       '@': resolve('src'),
-      utils: resolve('src/packages/utils')
+      utils: resolve('src/utils')
     }
   },
   performance: {
