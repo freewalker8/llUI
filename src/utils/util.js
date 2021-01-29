@@ -1,4 +1,3 @@
-
 export const isFunction = function(val) {
   return Object.prototype.toString.call(val) === '[object Function]';
 };
@@ -35,7 +34,50 @@ export const uuid = function() {
     return Math.floor(65536 * Math.random()).toString(16);
   }
 
-  const rd = s4() + '_' + s4() + '_' + s4() + '_' + Date.now().toString(16).slice(-4);
+  const rd =
+    s4() +
+    '_' +
+    s4() +
+    '_' +
+    s4() +
+    '_' +
+    Date.now()
+      .toString(16)
+      .slice(-4);
 
   return rd;
-}
+};
+
+/**
+ * 表格列字段转换
+ * @param {Function} h createElement
+ * @param {Object} params
+ * @param {String} other
+ */
+export const highLightTransfer = (h, params, other = '') => {
+  let value = other || params.row[params.column.property] || '';
+  let type = Object.prototype.toString.call(value);
+  let val = type === '[object Array]' ? value[0].ip : type === '[object Object]' ? value.ip : value;
+  let temp = val.toString().indexOf("<span style='color:red'>") > -1;
+
+  return h('span', temp ? { domProps: { innerHTML: val } } : [val]);
+};
+
+export const getRowIdentity = (row, rowKey) => {
+  if (typeof rowKey === 'string') {
+    if (rowKey.indexOf('.') < 0) {
+      return row[rowKey];
+    }
+
+    let key = rowKey.split('.');
+    let current = row;
+
+    for (let i = 0, len = key.length; i < len; i++) {
+      current = current[key[i]];
+    }
+
+    return current;
+  } else if (typeof rowKey === 'function') {
+    return rowKey.call(null, row);
+  }
+};

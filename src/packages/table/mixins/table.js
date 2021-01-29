@@ -1,22 +1,26 @@
-import { merge } from 'lodash';
+import { delegate } from 'utils/vDom';
+import { getRowIdentity, highLightTransfer, sortObjectArrayByProp } from 'utils/util';
+import Render from 'utils/render';
+import columnFilter from './columnFilter';
+import actionColumn from './actionColumn';
+import dragable from '../directives/dragable';
+import resize from '../directives/resize';
+
 import '../style/index.scss';
-import { delegate } from '../utils/vDom';
-import Render from '../utils/render';
 
 const DefaultPaginationProps = {
-  pageSizes: [10, 20, 50, 100],
-  layout: 'total, ->, sizes, prev, pager, next, jumper'
+  pageSizes: [5, 10, 20, 50, 100],
+  layout: 'slot, ->, total, sizes, prev, pager, next, jumper'
 };
 
 export default {
   inheritAttrs: false, // 未被识别为props的属性，将不会出现在根元素上
-  components: {
-    Render
-  },
+  components: { Render },
+  mixins: [columnFilter, actionColumn],
   props: {
     layout: {
       type: String,
-      default: 'tool, table, pagination'
+      default: 'tool, table, extra, pagination'
     },
     data: {
       type: Array,
@@ -24,11 +28,38 @@ export default {
         return [];
       }
     },
-    actionColumn: {
-      type: Object,
-      default() {
-        return {};
+    columns: {
+      type: Array,
+      default: () => []
+    },
+    rowKey: {
+      type: [String, Function],
+      default: 'id'
+    },
+    // 是否可拖动排序
+    dragSortable: {
+      type: Boolean,
+      default: false
+    },
+    // 拖动模式，可选表头模式（拖动表头排序）和过滤表单item拖动模式（在列过滤表单里面拖动列item进行排序）
+    dragSortMode: {
+      type: String,
+      default: 'thead',
+      validator(val) {
+        return ['thead', 'formItem'].includes(val);
       }
+    },
+    // 默认选中的行，table-column的type属性值为selection时生效
+    selection: {
+      type: Array,
+      default() {
+        return [];
+      }
+    },
+    // 是否可分页
+    pageable: {
+      type: Boolean,
+      default: true
     },
     currentPage: {
       type: Number,
@@ -44,182 +75,85 @@ export default {
         return {};
       }
     },
-    columns: {
-      type: Array,
-      default: () => []
+    customTableClass: String,
+    // 是否响应浏览器窗口大小改变以便改变表格内容区高度
+    autoHeight: {
+      type: Boolean,
+      default: true
+    },
+    // 表格内容区最小高度
+    minHeight: {
+      type: Number,
+      default: 100
+    },
+    // 表格内容区高度的修正系数
+    fixHeight: {
+      type: Number,
+      default: 100
     }
   },
-  render() {
-    const layoutMap = {
-      tool: this.renderTool(),
-      table: this.renderTable(),
-      pagination: this.renderPagination()
-    };
-    return <div class='ve-table'>{this.layouts.map(layout => layoutMap[layout])}</div>;
+  directives: {
+    dragable,
+    resize
   },
   data() {
     return {
+      columnCounter: 0, // 记录总共有多少列
+      allColumns: [], // 所有一级列，多级表头时，下面的列没记入其中，而是属于一级列的子列
+      tableColumns: [], // 渲染表格的列的数据
+      canFilterColumns: [], // 可过滤的列，用于展示到过滤表单
       innerCurrentPage: 1,
       innerPageSize: 10,
-      actionColumnProp: 'e6e4c9de-7cf5-4f19-bb73-838e5182a372',
-      innerPaginationProps: {}
+      innerPaginationProps: {},
+      // 表格状态相关参数
+      innerSelection: [], // 选中的行的row-key组成的数组
+      innerSelectionData: [] // 选中行的行数据组成的数组
     };
   },
   computed: {
     layouts() {
       return this.layout.split(',').map(item => item.trim());
     },
-    innerActionColumn() {
-      let { label, ...actionColumn } = this.actionColumn;
-
-      return merge(
-        {
-          show: true,
-          buttons: [],
-          props: {
-            label: label || '操作'
-          }
-        },
-        actionColumn
-      );
-    },
     paginationShow() {
-      return this.layouts.includes('pagination');
-    },
-    actionColumnShow() {
-      return this.innerActionColumn.buttons.length > 0;
+      return this.pageable && this.layouts.includes('pagination');
     },
     toolBarShow() {
-      return this.layouts.includes('tool') && this.$slots.tool;
+      return this.layouts.includes('tool') && this.$scopedSlots.tool;
+    },
+    extraShow() {
+      return this.layouts.includes('extra') && this.$slots.extra;
+    },
+    // 开启列过滤时合并过滤列和倒数第二列时倒数第二列的index（index从0开始）
+    colspanColumnFix() {
+      return this.showActionColumn ? this.columnCounter : this.columnCounter - 1;
     }
-  },
-  methods: {
-    renderTool() {
-      return this.toolBarShow ? <div class={'ve-table__tool'}>{this.$slots['tool']}</div> : null;
-    },
-    renderTable() {
-      return (
-        <el-table
-          ref='elTable'
-          data={this.curTableData}
-          {...{
-            attrs: this.$attrs,
-            on: this.$listeners,
-            directives: this._server ? [{ name: 'loading', value: this.innerLoading }] : undefined
-          }}
-          class={'ve-table__table'}>
-          {this.columns && this.renderTableColumns(this.columns)}
-          {this.$slots.default}
-          <template slot='empty'>{this.$slots.empty}</template>
-          <template slot='append'>{this.$slots.append}</template>
-          {this.actionColumnShow ? (
-            <el-table-column
-              prop={this.actionColumnProp}
-              {...{
-                attrs: this.innerActionColumn.props,
-                scopedSlots: {
-                  default: scope => {
-                    return (
-                      <div class='ve-table__action-list'>
-                        {this.innerActionColumn.buttons.map(button => {
-                          let buttonProps = Object.assign(
-                            {
-                              type: button.type || 'text',
-                              icon: button.icon
-                            },
-                            button.props
-                          );
-
-                          let clickHandler = function() {
-                            button.handler &&
-                              button.handler(scope.row, scope.column, scope.$index, scope.store);
-                          };
-
-                          return (
-                            <el-button onClick={clickHandler} {...{ attrs: buttonProps }}>
-                              {button.label}
-                            </el-button>
-                          );
-                        })}
-                      </div>
-                    );
-                  }
-                }
-              }}
-            />
-          ) : null}
-        </el-table>
-      );
-    },
-    renderTableColumns(columns) {
-      return columns.map(prop => {
-        const props = {
-          props: prop
-        };
-        props.scopedSlots = props.scopedSlots = {};
-        if (prop.render) {
-          props.scopedSlots.default = scope => <Render render={prop.render} {...scope}></Render>;
-        }
-        if (prop.header) {
-          props.scopedSlots.header = scope => <Render render={prop.header} {...scope}></Render>;
-        }
-        return (
-          <el-table-column {...props}>
-            {prop.columns ? this.renderTableColumns(prop.columns) : null}
-          </el-table-column>
-        );
-      });
-    },
-    renderPagination() {
-      return this.paginationShow ? (
-        <el-pagination
-          ref='elPagination'
-          class={'ve-table__pagination'}
-          background
-          {...{
-            attrs: this.innerPaginationProps,
-            on: {
-              'size-change': this.handleSizeChange,
-              'prev-click': this.handlePrevClick,
-              'next-click': this.handleNextClick,
-              'current-change': this.handleCurrentChange
-            }
-          }}
-          current-page={this.innerCurrentPage}
-          page-size={this.innerPageSize}
-          total={this.innerTotal}
-          class={'ve-table__pagination'}>
-          {this.$slots.pagination}
-        </el-pagination>
-      ) : null;
-    },
-    handleSizeChange(size) {
-      this.innerPageSize = size;
-    },
-    handlePrevClick(page) {
-      this.$emit('prev-click', page);
-    },
-    handleNextClick(page) {
-      this.$emit('next-click', page);
-    },
-    handleCurrentChange(page) {
-      this.innerCurrentPage = page;
-    }
-  },
-  mounted() {
-    delegate.call(this, this.$refs.elTable, [
-      'clearSelection',
-      'toggleRowSelection',
-      'toggleAllSelection',
-      'toggleRowExpansion',
-      'setCurrentRow',
-      'clearSort',
-      'clearFilter',
-      'doLayout',
-      'sort'
-    ]);
   },
   watch: {
+    allColumns: {
+      deep: true,
+      handler(columns) {
+        this.canFilterColumns = columns.filter(({ label }) => label && label.trim()); // 含有label且不为空的才能筛选
+        this.tableColumns = []; // 清空，触发更新
+        this.$nextTick(() => {
+          this.tableColumns = this.checkedColumns.length
+            ? columns.filter(({ prop, type }) => {
+                // 被选中的列和索引选择列（有type属性的列）进行展示
+                return this.checkedColumns.includes(prop) || !!type;
+              })
+            : columns;
+          // bugfix:修复el-talbe的default-sort失效的问题
+          // reason：这里设置了表格列后会进行表格渲染，渲染未完成时default-sort不会生效，el-talbe的源码里面就是在渲染完成后触发的排序
+          let defaultSort = null;
+          (defaultSort = this.$attrs['default-sort'] || '') &&
+            this.$nextTick(() => {
+              const el = this.getTableRef();
+              const { prop, order } = defaultSort;
+              const init = true;
+              el.store.commit('sort', { prop, order, init });
+            });
+        });
+      }
+    },
     // make innerCurrentPage and innerPageSize as data,
     // and watch currentPage to update innerCurrentPage, pageSize to update innerPageSize
     // at the same time watch innerCurrentPage and innerPageSize to emit sync emit.
@@ -252,13 +186,12 @@ export default {
     },
     innerCurrentPage(newVal, oldVal) {
       this.$nextTick(() => {
-        this.internalCurrentPage = newVal;
         if (oldVal !== newVal) {
           this.$emit('update:currentPage', newVal);
-          this.$emit('current-page-change', this.internalCurrentPage);
+          this.$emit('current-page-change', newVal);
           this.$emit('pagination-change', {
             pageSize: this.innerPageSize,
-            currentPage: this.internalCurrentPage
+            currentPage: newVal
           });
         }
       });
@@ -269,9 +202,9 @@ export default {
         if (this.paginationShow) {
           this.innerPaginationProps = Object.assign({}, DefaultPaginationProps, val);
 
-          if (this.innerPaginationProps.pageSizes.indexOf(this.innerPageSize) === -1) {
+          if (!this.innerPaginationProps.pageSizes.includes(this.innerPageSize)) {
             console.warn(
-              `[ve-table]: pageSize ${this.innerPageSize} is not included in pageSizes[${this.innerPaginationProps.pageSizes}], set pageSize to pageSizes[0]: ${this.innerPaginationProps.pageSizes[0]}`
+              `[ll-table]: pageSize ${this.innerPageSize} is not included in pageSizes[${this.innerPaginationProps.pageSizes}], set pageSize to pageSizes[0]: ${this.innerPaginationProps.pageSizes[0]}`
             );
             this.innerPageSize = this.innerPaginationProps.pageSizes[0];
           }
@@ -279,6 +212,397 @@ export default {
           this.innerPageSize = this.curTableData.length;
         }
       }
+    },
+    selection: {
+      deep: true,
+      immediate: true,
+      handler(val) {
+        if (!val.length) return;
+        this.$nextTick(() => {
+          this.innerSelection = [...val];
+          this._checkRows(val);
+        });
+      }
+    },
+    curTableData(val) {
+      if (!val.length) return;
+      if (this.selection.length) {
+        this.$nextTick(() => {
+          this._checkRows(this.selection);
+        });
+      }
     }
+  },
+  created() {
+    this.allColumns = this._collectColumns();
+
+    // 订阅拖动排序
+    this.dragSortable &&
+      this.$on('column-sorted', data => {
+        this._hanlderDragSort(data);
+      });
+  },
+  mounted() {
+    delegate.call(this, this.getTableRef(), [
+      'clearSelection',
+      'toggleRowSelection',
+      'toggleAllSelection',
+      'toggleRowExpansion',
+      'setCurrentRow',
+      'clearSort',
+      'clearFilter',
+      'doLayout',
+      'sort'
+    ]);
+  },
+  beforeDestroy() {
+    this.dragSortable && this.$off('column-sorted');
+  },
+  methods: {
+    /**
+     * @public
+     * 获取组件使用的el-table的ref
+     */
+    getTableRef() {
+      return this.$refs.elTable;
+    },
+     /**
+     * @public
+     * 获取组件使用的el-pagination的ref
+     */
+    getPaginationRef() {
+      return this.$refs.elPagination;
+    },
+    /**
+     * 重置表格
+     * 如果有自定义的工具栏则需要自己先清除搜索条件
+     */
+    _resetTable() {
+      const selection = this.$props['selection'];
+      this.innerCurrentPage = 1;
+      this.innerPageSize = this.pageSize || 10;
+
+      this.clearFilter();
+      !this.$attrs['default-sort'] && this.clearSort(); // 未设置默认排序时才清除排序
+      !selection.length ? this.clearSelection() : this._checkRows(selection); // 未设置默认选中行时才清除行选中，否则标记需要默认选中的行
+    },
+    /**
+     * 收集通过columns定义的和通过el-table-column定义的列
+     */
+    _collectColumns() {
+      const { columns = [], $slots } = this;
+      let baseOrder = 100;
+      const templateColumns = ($slots.default || [])
+        .filter(column => column.componentOptions && column.componentOptions.tag === 'el-table-column')
+        .map(column => {
+          const { componentOptions, data } = column;
+          const { propsData, children } = componentOptions;
+          const { attrs = {}, scopedSlots = {}, on = {}, onNative = {} } = data;
+
+          !children && this.columnCounter++;
+          return {
+            ...propsData,
+            ...attrs,
+            scopedSlots,
+            on,
+            onNative,
+            children: this._getChildren(children) // 子节点
+          };
+        });
+
+      const allColumns = [...templateColumns, ...columns].map(_c => {
+        const c = _c;
+        const { type, children } = c;
+        c.order === undefined && (c.order = ++baseOrder);
+        // 类型列（selection|index|expand）总是排在第一列
+        type && (c['label-class-name'] = 'wst-table__type-column') && (c.order = -100);
+        children ? this._columnMountCalc(children) : this.columnCounter++;
+
+        return c;
+      });
+
+      const hasEmpty = allColumns.some(item => !item.prop && !item.type);
+      hasEmpty &&
+        this.columnFilterable &&
+        console.warn('[wst-table]: unique prop is required when columnFilterable is enabled');
+
+      return sortObjectArrayByProp(allColumns, 'order');
+    },
+    /**
+     * 多级表头模式，获取多级列的子列信息
+     * @param {Array<Object>} chds 子列信息
+     */
+    _getChildren(chds) {
+      const collectChd = [];
+      if (chds) {
+        for (const c of chds) {
+          const { componentOptions, data = { attrs: {} } } = c;
+          const { propsData, children, tag } = componentOptions;
+          if (children && tag === 'el-table-column') {
+            collectChd.push({
+              ...propsData,
+              ...data.attrs,
+              children: this._getChildren(children)
+            });
+          } else {
+            collectChd.push({ ...propsData, ...data.attrs });
+          }
+        }
+      }
+    },
+    /**
+     * 统计表格列数量
+     * @param {Array<Object>} chds 一级表格列
+     */
+    _columnMountCalc(chds) {
+      for (const c of chds) {
+        const { children } = c;
+        children && children.length ? this._columnMountCalc(children) : this.columnCounter++;
+      }
+    },
+    // 合并行列
+    _spanMethod(scope) {
+      let { columnIndex } = scope;
+      const userSpanMethod = this.$attrs['span-method'];
+
+      // 用户传入的合并行列方法
+      if (userSpanMethod) {
+        return userSpanMethod(scope);
+      }
+
+      // 表格可过滤时合并倒数第二列和过滤列（最后一列）
+      else if (this.columnFilterable && columnIndex === this.colspanColumnFix) {
+        return {
+          colspan: 2,
+          rowspan: 1
+        };
+      }
+    },
+    _handleSizeChange(size) {
+      this.innerPageSize = size;
+    },
+    _handlePrevClick(page) {
+      this.$emit('prev-click', page);
+    },
+    _handleNextClick(page) {
+      this.$emit('next-click', page);
+    },
+    _handleCurrentChange(page) {
+      this.innerCurrentPage = page;
+    },
+    /**
+     * 对表格选中行数据进行拦截，处理表格选中状态变化
+     * @param {Array<Object>} arr 选中的表格行数据组成的数组
+     */
+    _handleSelectionChange(arr) {
+      this.innerSelectionData = arr;
+      this.innerSelection = arr.map(row => getRowIdentity(row, this.rowKey));
+      this.$emit('selection-change', arr);
+    },
+    /**
+     * 选中表格数据
+     * @param {Array<String>} val 待选中数据的rowKey组成的数组
+     */
+    _checkRows(val) {
+      // 标记选中项
+      this.curTableData.forEach(row => {
+        const key = getRowIdentity(row, this.rowKey);
+        this.toggleRowSelection(row, val.includes(key));
+      });
+    },
+    /**
+     * 处理拖动排序，更新列表信息
+     * @param {Array<String>} sortedData 列顺序，由列label信息组成
+     */
+    _handleDragSort(sortedData) {
+      const allColumns = this.allColumns;
+      allColumns.map(column => {
+        sortedData.map((label, index) => {
+          label === column.label && (column.order = index);
+        });
+      });
+
+      sortObjectArrayByProp(allColumns, 'order');
+
+      this.$emit('column-sort-change', allColumns, sortedData);
+    },
+    _headerCellStyle(scope) {
+      const { columnIndex } = scope;
+      const userHeaderCellStyle = this.$attrs['header-cell-style'];
+
+      if (userHeaderCellStyle) {
+        return userHeaderCellStyle(scope);
+      }
+      // 取消倒数第二列的有边框
+      else if (
+        this.columnFilterable &&
+        this.$attrs['border'] !== undefined &&
+        columnIndex === this.colspanColumnFix
+      ) {
+        return {
+          'border-right': 'none'
+        };
+      }
+    },
+    _renderTool() {
+      this.toolBarShow ? (
+        <div class='wst-table__toolBar'>
+          {this.$scopedSlots['tool']({
+            selection: this.innerSelection,
+            selectionData: this.innerSelectionData,
+            params: this.innerParams || {}
+          })}
+        </div>
+      ) : null;
+    },
+    _renderTable() {
+      /**
+       * 渲染列函数
+       * @param {Object} prop 列属性对象
+       * @param {Boolean} hasChildren 是否是多级表头的子列
+       */
+      const _renderColumn = (prop, hasChildren = false) => {
+        const { render, renderHeader, scopedSlots, on, onNative, children, ...props } = prop;
+        const propData = {
+          props,
+          scopedSlots,
+          on,
+          onNative
+        };
+        const key = prop.label || prop.type || prop.order;
+
+        hasChildren && (propData.props['label-class-name'] = 'wst-table__column--children');
+
+        propData.scopedSlots = propData.scopedSlots || {};
+
+        if (render) {
+          propData.scopedSlots.default = scope => <Render render={render} {...scope}></Render>;
+        }
+        // 增加全文检索模式，需要在doRequest的参数中传入searchType === 'fullText‘
+        else if (
+          props.type !== 'selection' &&
+          this.extraParams &&
+          this.extraParams.searchType === 'fullText'
+        ) {
+          propData.scopedSlots.default = scope => <Render render={highLightTransfer} {...scope}></Render>;
+        }
+
+        if (renderHeader) {
+          propData.scopedSlots.header = scope => <Render render={renderHeader} {...scope}></Render>;
+        }
+
+        // 多级表头
+        if (children && children.length) {
+          return (
+            <el-table-column {...propData} key={key}>
+              {children.map(c => {
+                return _renderColumn(c, true);
+              })}
+            </el-table-column>
+          );
+        }
+
+        // 单级表头
+        return <el-table-column {...propData} key={key}></el-table-column>;
+      };
+      return (
+        <el-table
+          ref='elTable'
+          {...{
+            props: {
+              ...this.$attrs,
+              data: this.curTableData,
+              'row-key': this.rowKey,
+              'span-method': this._spanMethod,
+              'header-cell-style': this._headerCellStyle
+            },
+            on: {
+              ...this.$listeners,
+              'selection-change': this._handleSelectionChange
+            },
+            nativeOn: {
+              selectionChange: this._handleSelectionChange
+            },
+            directives: [
+              this.dragSortMode === 'thead'
+                ? {
+                    name: 'dragable',
+                    value: {
+                      dragable: this.dragSortable, // 是否可拖动
+                      dragSelector: '.el-table__header-wrapper th .cell', //绑定拖动事件的元素
+                      // 不能绑定拖动事件的元素，根据类名查找
+                      excludeSelector: [
+                        'wst-table__action-column',
+                        'wst-table__type-column',
+                        'wst-table__filter-column',
+                        'wst-table__column--children',
+                      ],
+                      rebind: true, // 重新绑定事件
+                      instance: this
+                    }
+                  }
+                : {},
+              this._server ? { name: 'loading', value: this.innerLoading } : {},
+              !this.$attrs['max-height'] && this.autoHeight
+                ? {
+                    name: 'resize',
+                    value: {
+                      fixHeight: this.fixHeight,
+                      minHeight: this.minHeight,
+                      instance: this
+                    }
+                  }
+                : {}
+            ]
+          }}>
+          {this.$slots.prepend}
+          {this.tableColumns &&
+            this.tableColumns.map(prop => {
+              return _renderColumn(prop);
+            })}
+          <template slot='empty'>{this.$slots.empty}</template>
+          <template slot='append'>{this.$slots.append}</template>
+          {this._renderActionColumn()}
+          {this._renderFilterColumn()}
+        </el-table>
+      );
+    },
+    _renderPagination() {
+      return this.paginationShow && this.innerTotal ? (
+        <el-row class={['wst-table__pager']}>
+          <el-col span={24}>
+            <el-pagination
+              ref='elPagination'
+              class={'wst-table__pagination'}
+              background
+              {...{
+                attrs: this.innerPaginationProps,
+                on: {
+                  'size-change': this.handleSizeChange,
+                  'prev-click': this.handlePrevClick,
+                  'next-click': this.handleNextClick,
+                  'current-change': this.handleCurrentChange
+                }
+              }}
+              current-page={this.innerCurrentPage}
+              page-size={this.innerPageSize}
+              total={this.innerTotal}
+              class={'wst-table__pagination'}>
+              {this.$slots.pagination}
+            </el-pagination>
+          </el-col>
+        </el-row>
+      ) : null;
+    }
+  },
+  render() {
+    const layoutMap = {
+      tool: this._renderTool(),
+      table: this._renderTable(),
+      pagination: this._renderPagination()
+    };
+    return (
+      <div class={['wst-table', this.customTableClass]}>{this.layouts.map(layout => layoutMap[layout])}</div>
+    );
   }
 };
