@@ -1,5 +1,3 @@
-import { debounce } from 'lodash-es';
-
 function listenToggle(el, value, isListen = true) {
   let {
     dragable = false, // 是否可拖动
@@ -9,7 +7,6 @@ function listenToggle(el, value, isListen = true) {
     splitor = '.', // label分隔符
     rebind = false // 是否重新绑定事件
   } = value;
-
 
   if (!dragable) {
     return;
@@ -28,7 +25,7 @@ function listenToggle(el, value, isListen = true) {
       const behavior = isListen ? 'addEventListener' : 'removeEventListener';
       draggableDoms = el.querySelector(dragSelector);
 
-      for(const dDom of draggableDoms) {
+      for (const dDom of draggableDoms) {
         // 排除不可拖动元素
         if (
           excludeSelector &&
@@ -102,7 +99,10 @@ function listenToggle(el, value, isListen = true) {
       instance.$emit('column-sorted', __getSort(targetIndex, draggedIndex));
 
       // 直接拖动表格列改变列顺序后表格进行了重新渲染，导致绑定到列上的事件失效，所有需要重新绑定
-      rebind && instance.$nextTick(() => { _listen(); });
+      rebind &&
+        instance.$nextTick(() => {
+          _listen();
+        });
     }
 
     /**
@@ -125,7 +125,7 @@ function listenToggle(el, value, isListen = true) {
   }
 
   function _index(dom) {
-    for(const [index, d] of draggableDoms.entries()) {
+    for (const [index, d] of draggableDoms.entries()) {
       if (dom.innerText === d.innerText) {
         return index;
       }
@@ -142,4 +142,4 @@ export default {
   unbind(el, binding) {
     listenToggle(el, binding.value, false);
   }
-}
+};
