@@ -1,7 +1,7 @@
 import Table from '../mixins/table';
 
 export default {
-  name: 'VeTable',
+  name: 'LlTable',
   mixins: [Table],
   computed: {
     curTableData() {
@@ -9,7 +9,7 @@ export default {
         let ceilTotalPage = Math.ceil(this.innerTotal / this.innerPageSize);
         if (this.innerCurrentPage > ceilTotalPage) {
           console.warn(
-            `[ve-table]: currentPage ${this.currentPage} beyond total page ${ceilTotalPage} (data.length/pageSize,${this.innerTotal}/${this.innerPageSize}), set currentPage to totalPage: ${ceilTotalPage}`
+            `[ll-table]: currentPage ${this.currentPage} beyond total page ${ceilTotalPage} (data.length/pageSize,${this.innerTotal}/${this.innerPageSize}), set currentPage to totalPage: ${ceilTotalPage}`
           );
           this.innerCurrentPage = ceilTotalPage;
         }
@@ -21,6 +21,15 @@ export default {
     },
     innerTotal() {
       return this.data.length;
+    }
+  },
+  methods: {
+    /**
+     * 重置表格
+     * @public
+     */
+    resetTable() {
+      this._resetTable();
     }
   }
 };

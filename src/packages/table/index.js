@@ -1,20 +1,20 @@
-import VeTable from './components/VeTable';
-import VeTableSync from './components/VeTableSync';
+import LlTable from './components/Table';
+import LlTableSync from './components/TableSync';
 
-VeTable.install = function(Vue) {
-  Vue.component(VeTable.name, VeTable);
+LlTable.install = function(Vue) {
+  Vue.component(LlTable.name, LlTable);
 };
 
-VeTableSync.install = function(Vue) {
-  Vue.component(VeTableSync.name, VeTableSync);
+LlTableSync.install = function(Vue) {
+  Vue.component(LlTableSync.name, LlTableSync);
 };
 
 const install = function(Vue) {
-  VeTable.install(Vue);
-  VeTableSync.install(Vue);
+  LlTable.install(Vue);
+  LlTableSync.install(Vue);
 };
 
-export { install, VeTable, VeTableSync };
+export { install, LlTable, LlTableSync };
 
 export default {
   install
