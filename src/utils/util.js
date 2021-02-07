@@ -11,6 +11,30 @@ export const isArray = function(val) {
 };
 
 /**
+ * 深度判断两个变量是否相等,支持Array|Object|Number|String|Boolean
+ * @param {Array|Object|Number|String|Boolean} a 判断因子a
+ * @param {Array|Object|Number|String|Boolean} b 判断因子b
+ */
+export const isValueEqual = function(a, b) {
+  if (isArray(a) && isArray(b)) {
+    for (let idx = 0, len = a.length; idx < len; idx++) {
+      if (!isValueEqual(a[idx], b[idx])) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  if (isObject(a) && isObject(b)) {
+    return Object.keys(a).every(key => {
+      return isValueEqual(a[key], b[key]);
+    });
+  }
+
+  return a === b;
+};
+
+/**
  * 对象数组按对象的属性排序
  * @param {Array<Object>} arr 对象数组
  * @param {String} prop 排序的属性
