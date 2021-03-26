@@ -1,4 +1,5 @@
-$ll-table-hover-color: '#67C23A';
+@import "~element-ui/packages/theme-chalk/src/common/var";
+$wst-table-hover-color: '#67C23A';
 
 .wst-table {
   display: flex;
@@ -26,6 +27,49 @@ $ll-table-hover-color: '#67C23A';
   }
   &__pagination {
     float: none;
+
+    .el-button {
+      background-color: #FFFFFF;
+      border: 1px solid #DCDFE6;
+      :hover {
+        color: #FFFFFF;
+      }
+    }
+    .el-button--primary {
+      background-color: $--color-primary;
+      border-color: $--color-primary;
+      :hover {
+        color: #FFFFFF;
+      }
+    }
+    .el-button--success {
+      background-color: $--color-success;
+      border-color: $--color-success;
+      :hover {
+        color: #FFFFFF;
+      }
+    }
+    .el-button--info {
+      background-color: $--color-info;
+      border-color: $--color-info;
+      :hover {
+        color: #FFFFFF;
+      }
+    }
+    .el-button--warning {
+      background-color: $--color-warning;
+      border-color: $--color-warning;
+      :hover {
+        color: #FFFFFF;
+      }
+    }
+    .el-button--danger {
+      background-color: $--color-danger;
+      border-color: $--color-danger;
+      :hover {
+        color: #FFFFFF;
+      }
+    }
   }
   &__filter-column {
     &-warp {
@@ -48,7 +92,7 @@ $ll-table-hover-color: '#67C23A';
       cursor: move !important;
     }
     &--drop-over {
-      border: 1px dashed #{$ll-table-hover-color};
+      border: 1px dashed #{$wst-table-hover-color};
     }
   }
 }

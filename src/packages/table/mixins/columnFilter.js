@@ -1,5 +1,3 @@
-import { isArray } from 'utils/util';
-
 export default {
   props: {
     // 是否可过滤列
@@ -57,21 +55,29 @@ export default {
   },
   data() {
     return {
-      checkedColumns: [],
+      checkedColumns: [], // 存储过滤表单的选中值
       filterColumnVisible: false
     };
   },
   computed: {
+    // 计算最大展示列数
     innerMaxColumnNum() {
       return this.maxColumnNum || this.canFilterColumns.length;
+    },
+    // 计算字段所占宽度
+    cellSpan() {
+      return 24 / this.columnFilterRowNum;
+    },
+    // 计算哪些列字段被选中
+    defaultCheckedColumns() {
+      return this.columnFilterSelected || [...this.canFilterColumns.map(c => c.prop)];
     }
   },
   watch: {
-    columnFilterSelected: {
+    defaultCheckedColumns: {
       deep: true,
       immediate: true,
       handler(val) {
-        if (!isArray(val)) return;
         this.checkedColumns = [...val];
       }
     },
@@ -83,14 +89,8 @@ export default {
           return checked.includes(prop) || !!type;
         });
 
+        // 对外暴露筛选事件
         this.$emit('column-filter', checked);
-      }
-    },
-    canFilterColumns: {
-      deep: true,
-      handler(columns) {
-        // 选中展示的列
-        this.checkedColumns = this.columnFilterSelected || [...columns.map(c => c.prop)];
       }
     }
   },
@@ -127,7 +127,7 @@ export default {
                   },
                   props: {
                     min: this.minColumnNum,
-                    max: this.maxColumnNum
+                    max: this.innerMaxColumnNum
                   },
                   directives: [
                     this.dragSortModel === 'formItem'
@@ -145,7 +145,7 @@ export default {
                 <el-row>
                   {this.canFilterColumns.map(({ label, prop }, index) => {
                     return (
-                      <el-col span={this.columnFilterRowNum} class='wst-table__filter-column-cellbox'>
+                      <el-col span={this.cellSpan} class='wst-table__filter-column-cellbox'>
                         <el-checkbox
                           {...{
                             props: {

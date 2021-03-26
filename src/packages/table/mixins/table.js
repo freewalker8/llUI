@@ -98,6 +98,7 @@ export default {
   },
   data() {
     return {
+      baseOrder: 100, // 未显示设置表格列的order属性时，表格列order属性的基础值
       columnCounter: 0, // 记录总共有多少列
       allColumns: [], // 所有一级列，多级表头时，下面的列没记入其中，而是属于一级列的子列
       tableColumns: [], // 渲染表格的列的数据
@@ -129,10 +130,16 @@ export default {
     }
   },
   watch: {
+    columns: {
+      deep: true,
+      handler() {
+        this._initTable();
+        this.$emit('column-filter'); // 修改了列信息，触发下列筛选事件，从而触发重新绑定拖动事件
+      }
+    },
     allColumns: {
       deep: true,
       handler(columns) {
-        this.canFilterColumns = columns.filter(({ label }) => label && label.trim()); // 含有label且不为空的才能筛选
         this.tableColumns = []; // 清空，触发更新
         this.$nextTick(() => {
           this.tableColumns = this.checkedColumns.length
@@ -143,8 +150,8 @@ export default {
             : columns;
           // bugfix:修复el-talbe的default-sort失效的问题
           // reason：这里设置了表格列后会进行表格渲染，渲染未完成时default-sort不会生效，el-talbe的源码里面就是在渲染完成后触发的排序
-          let defaultSort = null;
-          (defaultSort = this.$attrs['default-sort'] || '') &&
+          let defaultSort;
+          (defaultSort = this.$attrs['default-sort']) &&
             this.$nextTick(() => {
               const el = this.getTableRef();
               const { prop, order } = defaultSort;
@@ -234,7 +241,8 @@ export default {
     }
   },
   created() {
-    this.allColumns = this._collectColumns();
+    // 获取表格列信息和可过滤列的信息
+    this._initTable();
 
     // 订阅拖动排序
     this.dragSortable &&
@@ -266,7 +274,7 @@ export default {
     getTableRef() {
       return this.$refs.elTable;
     },
-     /**
+    /**
      * @public
      * 获取组件使用的el-pagination的ref
      */
@@ -286,12 +294,18 @@ export default {
       !this.$attrs['default-sort'] && this.clearSort(); // 未设置默认排序时才清除排序
       !selection.length ? this.clearSelection() : this._checkRows(selection); // 未设置默认选中行时才清除行选中，否则标记需要默认选中的行
     },
+    // 获取表格列信息和可过滤列的信息
+    _initTable() {
+      // 获取表格需要展示的列的信息
+      this.allColumns = this._collectColumns();
+      // 获取可以进行过滤的列的信息
+      this.canFilterColumns = this.allColumns.filter(({ label }) => label && label.trim()); // 含有label且不为空的才能筛选
+    },
     /**
      * 收集通过columns定义的和通过el-table-column定义的列
      */
     _collectColumns() {
       const { columns = [], $slots } = this;
-      let baseOrder = 100;
       const templateColumns = ($slots.default || [])
         .filter(column => column.componentOptions && column.componentOptions.tag === 'el-table-column')
         .map(column => {
@@ -313,9 +327,15 @@ export default {
       const allColumns = [...templateColumns, ...columns].map(_c => {
         const c = _c;
         const { type, children } = c;
-        c.order === undefined && (c.order = ++baseOrder);
-        // 类型列（selection|index|expand）总是排在第一列
-        type && (c['label-class-name'] = 'wst-table__type-column') && (c.order = -100);
+        if (c.order === undefined) {
+          if (type) {
+            c['label-class-name'] = 'wst-table__type-column';
+            // 类型列（selection|index|expand）未设置order时总是排在前面
+            c.order = ++this.baseOrder - 100000;
+          } else {
+            c.order = ++this.baseOrder;
+          }
+        }
         children ? this._columnMountCalc(children) : this.columnCounter++;
 
         return c;
@@ -445,7 +465,7 @@ export default {
       }
     },
     _renderTool() {
-      this.toolBarShow ? (
+      return this.toolBarShow ? (
         <div class='wst-table__toolBar'>
           {this.$scopedSlots['tool']({
             selection: this.innerSelection,
@@ -458,18 +478,19 @@ export default {
     _renderTable() {
       /**
        * 渲染列函数
-       * @param {Object} prop 列属性对象
+       * @param {Object} propsData 列属性对象
        * @param {Boolean} hasChildren 是否是多级表头的子列
        */
-      const _renderColumn = (prop, hasChildren = false) => {
-        const { render, renderHeader, scopedSlots, on, onNative, children, ...props } = prop;
+      const _renderColumn = (propsData, hasChildren = false) => {
+        const { render, renderHeader, scopedSlots, on, onNative, children, ...props } = propsData;
         const propData = {
           props,
           scopedSlots,
           on,
           onNative
         };
-        const key = prop.label || prop.type || prop.order;
+        const { prop, type, order } = prop;
+        const key = order || type || prop;
 
         hasChildren && (propData.props['label-class-name'] = 'wst-table__column--children');
 
@@ -535,7 +556,7 @@ export default {
                         'wst-table__action-column',
                         'wst-table__type-column',
                         'wst-table__filter-column',
-                        'wst-table__column--children',
+                        'wst-table__column--children'
                       ],
                       rebind: true, // 重新绑定事件
                       instance: this
@@ -555,7 +576,6 @@ export default {
                 : {}
             ]
           }}>
-          {this.$slots.prepend}
           {this.tableColumns &&
             this.tableColumns.map(prop => {
               return _renderColumn(prop);
@@ -588,7 +608,23 @@ export default {
               page-size={this.innerPageSize}
               total={this.innerTotal}
               class={'wst-table__pagination'}>
-              {this.$slots.pagination}
+              {
+                <div
+                  class={'wst-table__pagination-extra'}
+                  {...{
+                    style: {
+                      float: this.innerPaginationProps.layout.indexOf('->') === -1 ? 'right' : 'left'
+                    }
+                  }}>
+                  {/* 提供插槽供用户自定义分页栏内容 */}
+                  {this.$scopedSlots['pagination'] &&
+                    this.$scopedSlots['pagination']({
+                      selection: this.innerSelection,
+                      selectionData: this.innerSelectionData,
+                      params: this.innerParams || {}
+                    })}
+                </div>
+              }
             </el-pagination>
           </el-col>
         </el-row>
@@ -599,7 +635,8 @@ export default {
     const layoutMap = {
       tool: this._renderTool(),
       table: this._renderTable(),
-      pagination: this._renderPagination()
+      pagination: this._renderPagination(),
+      extra: this.extraShow ? <div class={'wst-table__extra'}>{this.$slots['extra']}</div> : null
     };
     return (
       <div class={['wst-table', this.customTableClass]}>{this.layouts.map(layout => layoutMap[layout])}</div>
